@@ -1,0 +1,28 @@
+{
+  "required": true,
+  "compatibilityLevel": "JAVA_8",
+  "package": "wtf.bella.kamiblue.mixin.client",
+  "refmap": "mixins.kamiblue.refmap.json",
+  "client": [
+    "MixinCPacketChatMessage",
+    "MixinGuiChat",
+    "MixinNetworkManager",
+    "MixinEntity",
+    "MixinMinecraft",
+    "MixinStateImplementation",
+    "MixinEntityRenderer",
+    "MixinEntityPlayerSP",
+    "MixinModelBoat",
+    "MixinBlockSoulSand",
+    "MixinEntityPig",
+    "MixinGuiScreen",
+    "MixinBlockLiquid",
+    "MixinRenderPlayer",
+    "MixinGuiPlayerTabOverlay",
+    "MixinC00Handshake",
+    "MixinNetHandlerPlayClient",
+    "MixinRenderLiving",
+    "MixinPlayerControllerMP",
+    "MixinEntityLlama"
+  ]
+}
