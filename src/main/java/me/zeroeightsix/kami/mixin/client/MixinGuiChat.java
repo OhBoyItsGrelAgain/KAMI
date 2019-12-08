@@ -2,7 +2,9 @@ package me.zeroeightsix.kami.mixin.client;
 
 import me.zeroeightsix.kami.command.Command;
 import me.zeroeightsix.kami.gui.mc.KamiGuiChat;
+import me.zeroeightsix.kami.module.ModuleManager;
 import me.zeroeightsix.kami.util.Wrapper;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.GuiTextField;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,13 +19,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(GuiChat.class)
 public abstract class MixinGuiChat {
 
+    Minecraft mc = Minecraft.getMinecraft();
+
     @Shadow protected GuiTextField inputField;
 
     @Shadow public String historyBuffer;
 
     @Shadow public int sentHistoryCursor;
 
-    @Shadow public abstract void initGui();
+    @Inject(method = "initGui", at = @At("RETURN"))
+    public void initGui(CallbackInfo info) {
+        if (mc.player == null) return;
+        if (ModuleManager.getModuleByName("InfChatLength").isEnabled()) {
+            this.inputField.setMaxStringLength(2147483647);
+        }
+    }
 
     @Inject(method = "Lnet/minecraft/client/gui/GuiChat;keyTyped(CI)V", at = @At("RETURN"))
     public void returnKeyTyped(char typedChar, int keyCode, CallbackInfo info) {
@@ -32,5 +42,4 @@ public abstract class MixinGuiChat {
             Wrapper.getMinecraft().displayGuiScreen(new KamiGuiChat(inputField.getText(), historyBuffer, sentHistoryCursor));
         }
     }
-
 }
