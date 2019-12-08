@@ -1,0 +1,219 @@
+package wtf.bella.kamiblue;
+
+import com.google.common.base.Converter;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import me.zero.alpine.EventBus;
+import me.zero.alpine.EventManager;
+import wtf.bella.kamiblue.command.Command;
+import wtf.bella.kamiblue.command.CommandManager;
+import wtf.bella.kamiblue.event.ForgeEventProcessor;
+import wtf.bella.kamiblue.gui.kami.KamiGUI;
+import wtf.bella.kamiblue.gui.rgui.component.AlignedComponent;
+import wtf.bella.kamiblue.gui.rgui.component.Component;
+import wtf.bella.kamiblue.gui.rgui.component.container.use.Frame;
+import wtf.bella.kamiblue.gui.rgui.util.ContainerHelper;
+import wtf.bella.kamiblue.gui.rgui.util.Docking;
+import wtf.bella.kamiblue.module.Module;
+import wtf.bella.kamiblue.module.ModuleManager;
+import wtf.bella.kamiblue.setting.Setting;
+import wtf.bella.kamiblue.setting.Settings;
+import wtf.bella.kamiblue.setting.SettingsRegister;
+import wtf.bella.kamiblue.setting.config.Configuration;
+import wtf.bella.kamiblue.util.Friends;
+import wtf.bella.kamiblue.util.LagCompensator;
+import wtf.bella.kamiblue.util.Wrapper;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Created by 086 on 7/11/2017.
+ */
+@Mod(modid = KamiBlueMod.MODID, name = KamiBlueMod.MODNAME, version = KamiBlueMod.MODVER)
+public class KamiBlueMod {
+
+    public static final String MODID = "kamiblue";
+    public static final String MODNAME = "KAMI Blue";
+    public static final String MODVER = "v1.1.0";
+
+    public static final String KAMI_HIRAGANA = "\u304B\u307F";
+    public static final String KAMI_KATAKANA = "\u30AB\u30DF";
+    public static final String KAMI_KANJI = "\u795E";
+    public static final String KAMI_BLUE = "\u1d0b\u1d00\u1d0d\u026a \u0299\u029f\u1d1c\u1d07";
+
+    private static final String KAMI_CONFIG_NAME_DEFAULT = "KAMIConfig.json";
+
+    public static final Logger log = LogManager.getLogger("KAMI");
+
+    public static final EventBus EVENT_BUS = new EventManager();
+
+    @Mod.Instance
+    private static KamiBlueMod INSTANCE;
+
+    public KamiGUI guiManager;
+    public CommandManager commandManager;
+    private Setting<JsonObject> guiStateSetting = Settings.custom("gui", new JsonObject(), new Converter<JsonObject, JsonObject>() {
+        @Override
+        protected JsonObject doForward(JsonObject jsonObject) {
+            return jsonObject;
+        }
+
+        @Override
+        protected JsonObject doBackward(JsonObject jsonObject) {
+            return jsonObject;
+        }
+    }).buildAndRegister("");
+
+    @Mod.EventHandler
+    public void preInit(FMLPreInitializationEvent event) {
+
+    }
+
+    @Mod.EventHandler
+    public void init(FMLInitializationEvent event) {
+        KamiBlueMod.log.info("\n\nInitializing KAMI " + MODVER);
+
+        ModuleManager.initialize();
+
+        ModuleManager.getModules().stream().filter(module -> module.alwaysListening).forEach(EVENT_BUS::subscribe);
+        MinecraftForge.EVENT_BUS.register(new ForgeEventProcessor());
+        LagCompensator.INSTANCE = new LagCompensator();
+
+        Wrapper.init();
+
+        guiManager = new KamiGUI();
+        guiManager.initializeGUI();
+
+        commandManager = new CommandManager();
+
+        Friends.initFriends();
+        SettingsRegister.register("commandPrefix", Command.commandPrefix);
+        loadConfiguration();
+        KamiBlueMod.log.info("Settings loaded");
+
+        ModuleManager.updateLookup(); // generate the lookup table after settings are loaded to make custom module names work
+
+        // After settings loaded, we want to let the enabled modules know they've been enabled (since the setting is done through reflection)
+        ModuleManager.getModules().stream().filter(Module::isEnabled).forEach(Module::enable);
+
+        KamiBlueMod.log.info("KAMI Mod initialized!\n");
+    }
+
+    public static String getConfigName() {
+        Path config = Paths.get("KAMILastConfig.txt");
+        String kamiConfigName = KAMI_CONFIG_NAME_DEFAULT;
+        try(BufferedReader reader = Files.newBufferedReader(config)) {
+            kamiConfigName = reader.readLine();
+            if (!isFilenameValid(kamiConfigName)) kamiConfigName = KAMI_CONFIG_NAME_DEFAULT;
+        } catch (NoSuchFileException e) {
+            try(BufferedWriter writer = Files.newBufferedWriter(config)) {
+                writer.write(KAMI_CONFIG_NAME_DEFAULT);
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return kamiConfigName;
+    }
+
+    public static void loadConfiguration() {
+        try {
+            loadConfigurationUnsafe();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void loadConfigurationUnsafe() throws IOException {
+        String kamiConfigName = getConfigName();
+        Path kamiConfig = Paths.get(kamiConfigName);
+        if (!Files.exists(kamiConfig)) return;
+        Configuration.loadConfiguration(kamiConfig);
+
+        JsonObject gui = KamiBlueMod.INSTANCE.guiStateSetting.getValue();
+        for (Map.Entry<String, JsonElement> entry : gui.entrySet()) {
+            Optional<Component> optional = KamiBlueMod.INSTANCE.guiManager.getChildren().stream().filter(component -> component instanceof Frame).filter(component -> ((Frame) component).getTitle().equals(entry.getKey())).findFirst();
+            if (optional.isPresent()) {
+                JsonObject object = entry.getValue().getAsJsonObject();
+                Frame frame = (Frame) optional.get();
+                frame.setX(object.get("x").getAsInt());
+                frame.setY(object.get("y").getAsInt());
+                Docking docking = Docking.values()[object.get("docking").getAsInt()];
+                if (docking.isLeft()) ContainerHelper.setAlignment(frame, AlignedComponent.Alignment.LEFT);
+                else if (docking.isRight()) ContainerHelper.setAlignment(frame, AlignedComponent.Alignment.RIGHT);
+                else if (docking.isCenterVertical()) ContainerHelper.setAlignment(frame, AlignedComponent.Alignment.CENTER);
+                frame.setDocking(docking);
+                frame.setMinimized(object.get("minimized").getAsBoolean());
+                frame.setPinned(object.get("pinned").getAsBoolean());
+            } else {
+                System.err.println("Found GUI config entry for " + entry.getKey() + ", but found no frame with that name");
+            }
+        }
+        KamiBlueMod.getInstance().getGuiManager().getChildren().stream().filter(component -> (component instanceof Frame) && (((Frame) component).isPinneable()) && component.isVisible()).forEach(component -> component.setOpacity(0f));
+    }
+
+    public static void saveConfiguration() {
+        try {
+            saveConfigurationUnsafe();
+        }catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void saveConfigurationUnsafe() throws IOException {
+        JsonObject object = new JsonObject();
+        KamiBlueMod.INSTANCE.guiManager.getChildren().stream().filter(component -> component instanceof Frame).map(component -> (Frame) component).forEach(frame -> {
+            JsonObject frameObject = new JsonObject();
+            frameObject.add("x", new JsonPrimitive(frame.getX()));
+            frameObject.add("y", new JsonPrimitive(frame.getY()));
+            frameObject.add("docking", new JsonPrimitive(Arrays.asList(Docking.values()).indexOf(frame.getDocking())));
+            frameObject.add("minimized", new JsonPrimitive(frame.isMinimized()));
+            frameObject.add("pinned", new JsonPrimitive(frame.isPinned()));
+            object.add(frame.getTitle(), frameObject);
+        });
+        KamiBlueMod.INSTANCE.guiStateSetting.setValue(object);
+
+        Path outputFile = Paths.get(getConfigName());
+        if (!Files.exists(outputFile))
+            Files.createFile(outputFile);
+        Configuration.saveConfiguration(outputFile);
+        ModuleManager.getModules().forEach(Module::destroy);
+    }
+
+    public static boolean isFilenameValid(String file) {
+        File f = new File(file);
+        try {
+            f.getCanonicalPath();
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    public static KamiBlueMod getInstance() {
+        return INSTANCE;
+    }
+
+    public KamiGUI getGuiManager() {
+        return guiManager;
+    }
+
+    public CommandManager getCommandManager() {
+        return commandManager;
+    }
+}
