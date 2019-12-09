@@ -47,7 +47,7 @@ import java.util.Optional;
 @Mod(modid = KamiMod.MODID, name = KamiMod.MODNAME, version = KamiMod.MODVER)
 public class KamiMod {
 
-    public static final String MODID = "kami";
+    public static final String MODID = "kamiblue";
     public static final String MODNAME = "KAMI Blue";
     public static final String MODVER = "v1.1.0";
 
